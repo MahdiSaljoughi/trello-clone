@@ -10,12 +10,41 @@ export async function PUT(
   try {
     const { title, order } = await request.json();
 
-    const list = await prisma.list.update({
+    if (order !== undefined) {
+      // Update orders of other lists
+      const list = await prisma.list.findUnique({
+        where: { id: params.id },
+      });
+
+      if (list) {
+        if (order > list.order) {
+          // لیست به پایین رفته
+          await prisma.list.updateMany({
+            where: {
+              boardId: list.boardId,
+              order: { gt: list.order, lte: order },
+            },
+            data: { order: { decrement: 1 } },
+          });
+        } else if (order < list.order) {
+          // لیست به بالا رفته
+          await prisma.list.updateMany({
+            where: {
+              boardId: list.boardId,
+              order: { gte: order, lt: list.order },
+            },
+            data: { order: { increment: 1 } },
+          });
+        }
+      }
+    }
+
+    const updatedList = await prisma.list.update({
       where: { id: params.id },
       data: { title, order },
     });
 
-    return NextResponse.json(list);
+    return NextResponse.json(updatedList);
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to update list" },
