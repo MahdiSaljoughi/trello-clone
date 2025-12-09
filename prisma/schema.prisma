@@ -1,0 +1,91 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model Board {
+  id          String   @id @default(cuid())
+  title       String   @db.VarChar(255)
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lists  List[]
+}
+
+model List {
+  id        String   @id @default(cuid())
+  title     String   @db.VarChar(255)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  boardId String
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards   Card[]
+
+  @@index([boardId])
+  @@index([boardId, order])
+}
+
+model Card {
+  id          String    @id @default(cuid())
+  title       String    @db.VarChar(255)
+  description String?   @db.Text
+  order       Int       @default(0)
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  listId      String
+  list        List         @relation(fields: [listId], references: [id], onDelete: Cascade)
+  labels      Label[]
+  attachments Attachment[]
+  comments    Comment[]
+
+  @@index([listId])
+  @@index([listId, order])
+}
+
+model Label {
+  id     String @id @default(cuid())
+  title  String @db.VarChar(100)
+  color  String @db.VarChar(7)
+  cardId String
+  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+}
+
+model Attachment {
+  id     String @id @default(cuid())
+  name   String @db.VarChar(255)
+  url    String @db.Text
+  type   String @db.VarChar(50)
+  size   Int?
+  cardId String
+  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  cardId String
+  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+}
