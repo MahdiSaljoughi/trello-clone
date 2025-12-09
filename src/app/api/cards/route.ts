@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// POST /api/cards
 export async function POST(request: Request) {
   try {
-    const { title, description, listId } = await request.json();
+    const {
+      title,
+      description,
+      listId,
+      priority = "medium",
+      dueDate,
+    } = await request.json();
 
     if (!title || !listId) {
       return NextResponse.json(
-        { error: "Title and listId are required" },
+        {
+          error: "Title and listId are required",
+        },
         { status: 400 }
       );
     }
@@ -24,6 +31,8 @@ export async function POST(request: Request) {
         title,
         description,
         listId,
+        priority,
+        dueDate: dueDate ? new Date(dueDate) : null,
         order: lastCard ? lastCard.order + 1 : 0,
       },
     });
@@ -31,7 +40,9 @@ export async function POST(request: Request) {
     return NextResponse.json(card);
   } catch (error) {
     return NextResponse.json(
-      { error: "Failed to create card" },
+      {
+        error: "Failed to create card",
+      },
       { status: 500 }
     );
   }

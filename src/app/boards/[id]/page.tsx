@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -18,33 +18,34 @@ import {
   useSensors,
   closestCorners,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  horizontalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { SortableList } from "@/components/SortableList";
+import { arrayMove } from "@dnd-kit/sortable";
 
-interface Board {
-  id: string;
-  title: string;
-  description?: string;
-  lists: List[];
-}
+import { List } from "@/components/List";
 
-interface List {
-  id: string;
-  title: string;
-  order: number;
-  cards: Card[];
-}
-
+// Types
 interface Card {
   id: string;
   title: string;
   description?: string;
   order: number;
   listId: string;
+  priority: "low" | "medium" | "high" | "urgent";
+  isCompleted: boolean;
+  dueDate?: string;
+}
+
+interface ListType {
+  id: string;
+  title: string;
+  order: number;
+  cards: Card[];
+}
+
+interface Board {
+  id: string;
+  title: string;
+  description?: string;
+  lists: ListType[];
 }
 
 export default function BoardPage() {
@@ -64,14 +65,10 @@ export default function BoardPage() {
     })
   );
 
-  useEffect(() => {
-    if (params.id) {
-      fetchBoard();
-    }
-  }, [params.id]);
-
-  const fetchBoard = async () => {
+  // Fetch board
+  const fetchBoard = useCallback(async () => {
     try {
+      setLoading(true);
       const { data } = await axios.get(`/api/boards/${params.id}`);
       setBoard(data);
     } catch (error) {
@@ -80,8 +77,15 @@ export default function BoardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.id, router]);
 
+  useEffect(() => {
+    if (params.id) {
+      fetchBoard();
+    }
+  }, [params.id, fetchBoard]);
+
+  // Create list
   const createList = async () => {
     if (!newList.trim()) {
       toast.error("List title is required");
@@ -110,13 +114,19 @@ export default function BoardPage() {
     }
   };
 
-  const createCard = async (listId: string) => {
-    const title = prompt("Card title:");
-    if (!title?.trim()) return;
-
+  // Create card
+  const createCard = async (
+    listId: string,
+    cardData: {
+      title: string;
+      description?: string;
+      priority?: "low" | "medium" | "high" | "urgent";
+      dueDate?: string;
+    }
+  ) => {
     try {
       const { data } = await axios.post("/api/cards", {
-        title,
+        ...cardData,
         listId,
       });
 
@@ -138,6 +148,7 @@ export default function BoardPage() {
     }
   };
 
+  // Delete list
   const deleteList = async (listId: string) => {
     if (!confirm("Delete this list and all its cards?")) return;
 
@@ -158,6 +169,7 @@ export default function BoardPage() {
     }
   };
 
+  // Delete card
   const deleteCard = async (cardId: string, listId: string) => {
     if (!confirm("Delete this card?")) return;
 
@@ -184,95 +196,91 @@ export default function BoardPage() {
     }
   };
 
+  // Update card
+  const updateCard = async (cardId: string, updates: Partial<Card>) => {
+    try {
+      const { data } = await axios.put(`/api/cards/${cardId}`, updates);
+
+      setBoard((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          lists: prev.lists.map((list) => ({
+            ...list,
+            cards: list.cards.map((card) =>
+              card.id === cardId ? { ...card, ...data } : card
+            ),
+          })),
+        };
+      });
+
+      toast.success("Card updated");
+    } catch (error) {
+      toast.error("Failed to update card");
+      fetchBoard();
+    }
+  };
+
   // Handle drag start
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
   };
 
-  // Handle drag end
+  // Handle drag end - فقط برای کارت‌ها
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (!over || !board) return;
+    if (!over || !board) {
+      setActiveId(null);
+      return;
+    }
 
     setActiveId(null);
 
-    // If dragging a list
-    if (active.data.current?.type === "list") {
-      const oldIndex = board.lists.findIndex((list) => list.id === active.id);
-      const newIndex = board.lists.findIndex((list) => list.id === over.id);
+    const activeId = active.id as string;
+    const overId = over.id as string;
 
-      if (oldIndex !== newIndex) {
-        const newLists = arrayMove(board.lists, oldIndex, newIndex);
+    if (activeId === overId) return;
 
-        // Update local state
-        setBoard({
-          ...board,
-          lists: newLists.map((list, index) => ({
-            ...list,
-            order: index,
-          })),
-        });
-
-        // Update in database
-        try {
-          await axios.put(`/api/lists/${active.id}`, {
-            order: newIndex,
-          });
-        } catch (error) {
-          toast.error("Failed to update list order");
-          fetchBoard(); // Revert changes
-        }
-      }
-    }
-
-    // If dragging a card
+    // اگر از نوع کارت باشد
     if (active.data.current?.type === "card") {
       const activeCard = active.data.current.card as Card;
-      const overId = over.id as string;
 
-      // Find source and destination lists
-      const sourceListIndex = board.lists.findIndex(
+      // پیدا کردن لیست فعلی کارت
+      const activeListIndex = board.lists.findIndex(
         (list) => list.id === activeCard.listId
       );
 
-      // Check if card is dropped on a list or another card
-      const isOverList = board.lists.some((list) => list.id === overId);
-      const isOverCard = board.lists.some((list) =>
-        list.cards.some((card) => card.id === overId)
-      );
+      // بررسی اینکه روی کدام عنصر رها شده
+      const overListIndex = board.lists.findIndex((list) => {
+        // اگر روی لیست رها شده
+        if (list.id === overId) return true;
+        // یا اگر روی کارتی در این لیست رها شده
+        return list.cards.some((card) => card.id === overId);
+      });
 
-      if (isOverList) {
-        // Card dropped on a list
-        const destinationListIndex = board.lists.findIndex(
-          (list) => list.id === overId
-        );
+      if (activeListIndex === -1 || overListIndex === -1) return;
 
-        if (sourceListIndex !== destinationListIndex) {
-          // Move card to different list
-          const sourceList = board.lists[sourceListIndex];
-          const destinationList = board.lists[destinationListIndex];
+      const activeList = board.lists[activeListIndex];
+      const overList = board.lists[overListIndex];
 
-          const newSourceCards = sourceList.cards.filter(
-            (card) => card.id !== activeCard.id
-          );
-          const newDestinationCards = [
-            ...destinationList.cards,
-            {
-              ...activeCard,
-              listId: destinationList.id,
-              order: destinationList.cards.length,
-            },
-          ];
+      // اگر در همان لیست هستیم
+      if (activeList.id === overList.id) {
+        const newCards = [...activeList.cards];
+        const oldIndex = newCards.findIndex((card) => card.id === activeId);
+        const overIndex = newCards.findIndex((card) => card.id === overId);
+
+        if (oldIndex !== -1 && overIndex !== -1) {
+          const [movedCard] = newCards.splice(oldIndex, 1);
+          newCards.splice(overIndex, 0, movedCard);
 
           const newLists = [...board.lists];
-          newLists[sourceListIndex] = {
-            ...sourceList,
-            cards: newSourceCards,
-          };
-          newLists[destinationListIndex] = {
-            ...destinationList,
-            cards: newDestinationCards,
+          newLists[activeListIndex] = {
+            ...activeList,
+            cards: newCards.map((card, index) => ({
+              ...card,
+              order: index,
+            })),
           };
 
           setBoard({
@@ -280,125 +288,213 @@ export default function BoardPage() {
             lists: newLists,
           });
 
-          // Update in database
+          // آپدیت در دیتابیس
           try {
             await axios.put(`/api/cards/${activeCard.id}`, {
-              listId: destinationList.id,
-              order: destinationList.cards.length,
+              order: overIndex,
             });
-            toast.success("Card moved");
           } catch (error) {
-            toast.error("Failed to move card");
+            toast.error("Failed to reorder card");
             fetchBoard();
           }
         }
-      } else if (isOverCard) {
-        // Card dropped on another card
-        const overCardId = overId;
-        let destinationListIndex = -1;
-        let overCardIndex = -1;
+      } else {
+        // انتقال به لیست دیگر
+        const newActiveCards = activeList.cards.filter(
+          (card) => card.id !== activeId
+        );
 
-        // Find which list contains the over card
-        board.lists.forEach((list, index) => {
-          const cardIndex = list.cards.findIndex(
-            (card) => card.id === overCardId
-          );
-          if (cardIndex !== -1) {
-            destinationListIndex = index;
-            overCardIndex = cardIndex;
-          }
+        const overCardIndex = overList.cards.findIndex(
+          (card) => card.id === overId
+        );
+        const insertIndex =
+          overCardIndex !== -1 ? overCardIndex : overList.cards.length;
+
+        const newOverCards = [...overList.cards];
+        newOverCards.splice(insertIndex, 0, {
+          ...activeCard,
+          listId: overList.id,
         });
 
-        if (destinationListIndex !== -1) {
-          const destinationList = board.lists[destinationListIndex];
+        const newLists = [...board.lists];
+        newLists[activeListIndex] = {
+          ...activeList,
+          cards: newActiveCards.map((card, index) => ({
+            ...card,
+            order: index,
+          })),
+        };
+        newLists[overListIndex] = {
+          ...overList,
+          cards: newOverCards.map((card, index) => ({
+            ...card,
+            order: index,
+          })),
+        };
 
-          if (sourceListIndex === destinationListIndex) {
-            // Reorder within same list
-            const cards = [...destinationList.cards];
-            const oldIndex = cards.findIndex(
-              (card) => card.id === activeCard.id
-            );
+        setBoard({
+          ...board,
+          lists: newLists,
+        });
 
-            if (oldIndex !== overCardIndex) {
-              const newCards = arrayMove(cards, oldIndex, overCardIndex);
-
-              const newLists = [...board.lists];
-              newLists[destinationListIndex] = {
-                ...destinationList,
-                cards: newCards.map((card, index) => ({
-                  ...card,
-                  order: index,
-                })),
-              };
-
-              setBoard({
-                ...board,
-                lists: newLists,
-              });
-
-              // Update in database
-              try {
-                await axios.put(`/api/cards/${activeCard.id}`, {
-                  order: overCardIndex,
-                });
-              } catch (error) {
-                toast.error("Failed to reorder card");
-                fetchBoard();
-              }
-            }
-          } else {
-            // Move to different list at specific position
-            const sourceList = board.lists[sourceListIndex];
-            const sourceCards = [...sourceList.cards];
-            const oldIndex = sourceCards.findIndex(
-              (card) => card.id === activeCard.id
-            );
-            sourceCards.splice(oldIndex, 1);
-
-            const destinationCards = [...destinationList.cards];
-            destinationCards.splice(overCardIndex, 0, {
-              ...activeCard,
-              listId: destinationList.id,
-            });
-
-            const newLists = [...board.lists];
-            newLists[sourceListIndex] = {
-              ...sourceList,
-              cards: sourceCards.map((card, index) => ({
-                ...card,
-                order: index,
-              })),
-            };
-            newLists[destinationListIndex] = {
-              ...destinationList,
-              cards: destinationCards.map((card, index) => ({
-                ...card,
-                order: index,
-              })),
-            };
-
-            setBoard({
-              ...board,
-              lists: newLists,
-            });
-
-            // Update in database
-            try {
-              await axios.put(`/api/cards/${activeCard.id}`, {
-                listId: destinationList.id,
-                order: overCardIndex,
-              });
-              toast.success("Card moved");
-            } catch (error) {
-              toast.error("Failed to move card");
-              fetchBoard();
-            }
-          }
+        // آپدیت در دیتابیس
+        try {
+          await axios.put(`/api/cards/${activeCard.id}`, {
+            listId: overList.id,
+            order: insertIndex,
+          });
+          toast.success("Card moved to another list");
+        } catch (error) {
+          toast.error("Failed to move card");
+          fetchBoard();
         }
       }
     }
   };
 
+  // Move card to different list
+  const moveCardToList = async (
+    activeCard: Card,
+    sourceListIndex: number,
+    destinationListIndex: number
+  ) => {
+    if (sourceListIndex === destinationListIndex) return;
+
+    const sourceList = board!.lists[sourceListIndex];
+    const destinationList = board!.lists[destinationListIndex];
+
+    const newSourceCards = sourceList.cards.filter(
+      (card) => card.id !== activeCard.id
+    );
+    const newDestinationCards = [
+      ...destinationList.cards,
+      {
+        ...activeCard,
+        listId: destinationList.id,
+        order: destinationList.cards.length,
+      },
+    ];
+
+    const newLists = [...board!.lists];
+    newLists[sourceListIndex] = {
+      ...sourceList,
+      cards: newSourceCards,
+    };
+    newLists[destinationListIndex] = {
+      ...destinationList,
+      cards: newDestinationCards,
+    };
+
+    setBoard({
+      ...board!,
+      lists: newLists,
+    });
+
+    // Update in database
+    try {
+      await axios.put(`/api/cards/${activeCard.id}`, {
+        listId: destinationList.id,
+        order: destinationList.cards.length,
+      });
+      toast.success("Card moved");
+    } catch (error) {
+      toast.error("Failed to move card");
+      fetchBoard();
+    }
+  };
+
+  // Move card to specific position
+  const moveCardToPosition = async (
+    activeCard: Card,
+    sourceListIndex: number,
+    destinationListIndex: number,
+    overCardIndex: number
+  ) => {
+    const sourceList = board!.lists[sourceListIndex];
+    const destinationList = board!.lists[destinationListIndex];
+
+    if (sourceListIndex === destinationListIndex) {
+      // Reorder within same list
+      const cards = [...destinationList.cards];
+      const oldIndex = cards.findIndex((card) => card.id === activeCard.id);
+
+      if (oldIndex !== overCardIndex) {
+        const newCards = arrayMove(cards, oldIndex, overCardIndex);
+
+        const newLists = [...board!.lists];
+        newLists[destinationListIndex] = {
+          ...destinationList,
+          cards: newCards.map((card, index) => ({
+            ...card,
+            order: index,
+          })),
+        };
+
+        setBoard({
+          ...board!,
+          lists: newLists,
+        });
+
+        // Update in database
+        try {
+          await axios.put(`/api/cards/${activeCard.id}`, {
+            order: overCardIndex,
+          });
+        } catch (error) {
+          toast.error("Failed to reorder card");
+          fetchBoard();
+        }
+      }
+    } else {
+      // Move to different list
+      const sourceCards = [...sourceList.cards];
+      const oldIndex = sourceCards.findIndex(
+        (card) => card.id === activeCard.id
+      );
+      sourceCards.splice(oldIndex, 1);
+
+      const destinationCards = [...destinationList.cards];
+      destinationCards.splice(overCardIndex, 0, {
+        ...activeCard,
+        listId: destinationList.id,
+      });
+
+      const newLists = [...board!.lists];
+      newLists[sourceListIndex] = {
+        ...sourceList,
+        cards: sourceCards.map((card, index) => ({
+          ...card,
+          order: index,
+        })),
+      };
+      newLists[destinationListIndex] = {
+        ...destinationList,
+        cards: destinationCards.map((card, index) => ({
+          ...card,
+          order: index,
+        })),
+      };
+
+      setBoard({
+        ...board!,
+        lists: newLists,
+      });
+
+      // Update in database
+      try {
+        await axios.put(`/api/cards/${activeCard.id}`, {
+          listId: destinationList.id,
+          order: overCardIndex,
+        });
+        toast.success("Card moved");
+      } catch (error) {
+        toast.error("Failed to move card");
+        fetchBoard();
+      }
+    }
+  };
+
+  // Loading state
   if (loading) {
     return (
       <div className="p-6">
@@ -421,13 +517,25 @@ export default function BoardPage() {
     );
   }
 
-  if (!board) return null;
+  if (!board) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Board not found</h1>
+          <Button onClick={() => router.push("/")}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Home
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-4 mb-4">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex items-center gap-4 mb-6">
           <Button variant="ghost" onClick={() => router.push("/")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
@@ -452,73 +560,61 @@ export default function BoardPage() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="mx-auto">
+        <div className="max-w-7xl mx-auto">
           <div className="flex gap-4 overflow-x-auto pb-4">
-            <SortableContext
-              items={board.lists.map((list) => list.id)}
-              strategy={horizontalListSortingStrategy}
-            >
-              {/* Existing Lists */}
-              {board.lists.map((list) => (
-                <SortableList
-                  key={list.id}
-                  list={list}
-                  onDelete={deleteList}
-                  onCreateCard={() => createCard(list.id)}
-                  onDeleteCard={(cardId) => deleteCard(cardId, list.id)}
-                />
-              ))}
+            {/* Existing Lists - غیر sortable */}
+            {board.lists.map((list) => (
+              <List
+                key={list.id}
+                list={list}
+                onDelete={() => deleteList(list.id)}
+                onCreateCard={(cardData) => createCard(list.id, cardData)}
+                onDeleteCard={(cardId) => deleteCard(cardId, list.id)}
+                onUpdateCard={(cardId, updates) => updateCard(cardId, updates)}
+              />
+            ))}
 
-              {/* Add List Form */}
-              <div className="flex-shrink-0 w-72">
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                  <input
-                    type="text"
-                    value={newList}
-                    onChange={(e) => setNewList(e.target.value)}
-                    placeholder="Enter list title..."
-                    className="w-full p-2 border rounded mb-3"
-                    onKeyPress={(e) => e.key === "Enter" && createList()}
-                  />
-                  <div className="flex gap-2">
-                    <Button onClick={createList} className="flex-1">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add List
-                    </Button>
-                    <button
-                      onClick={() => setNewList("")}
-                      className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+            {/* Add List Form */}
+            <div className="shrink-0 w-80">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                <input
+                  type="text"
+                  value={newList}
+                  onChange={(e) => setNewList(e.target.value)}
+                  placeholder="Enter list title..."
+                  className="w-full p-2 border rounded mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onKeyPress={(e) => e.key === "Enter" && createList()}
+                />
+                <div className="flex gap-2">
+                  <Button onClick={createList} className="flex-1">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add List
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setNewList("")}
+                    className="px-4"
+                  >
+                    Cancel
+                  </Button>
                 </div>
               </div>
-            </SortableContext>
+            </div>
           </div>
         </div>
 
-        {/* Drag Overlay */}
+        {/* Drag Overlay - فقط برای کارت‌ها */}
         <DragOverlay>
           {activeId ? (
             <div className="opacity-80 rotate-3">
-              {activeId.startsWith("list-") ? (
-                <div className="w-72 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold">Dragging list...</h3>
-                    <GripVertical className="h-4 w-4 text-gray-400" />
+              <div className="w-64 bg-white dark:bg-gray-800 rounded shadow-lg p-3 border-2 border-blue-500">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-medium">Dragging card...</h4>
                   </div>
+                  <GripVertical className="h-4 w-4 text-gray-400" />
                 </div>
-              ) : (
-                <div className="w-64 bg-white dark:bg-gray-800 rounded shadow-lg p-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-medium">Dragging card...</h4>
-                    </div>
-                    <GripVertical className="h-4 w-4 text-gray-400" />
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           ) : null}
         </DragOverlay>
