@@ -1,8 +1,10 @@
+// src/components/boards/CreateBoardDialog.tsx
 "use client";
 
 import { useState } from "react";
-import axios from "axios";
-import { Plus } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import {
   Dialog,
   DialogContent,
@@ -12,128 +14,122 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { createBoard } from "@/lib/api";
+import { useRouter } from "next/navigation";
+
+const formSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  description: z.string().optional(),
+});
 
 interface CreateBoardDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
   onSuccess?: () => void;
 }
 
 export function CreateBoardDialog({
-  open,
-  onOpenChange,
+  children,
   onSuccess,
 }: CreateBoardDialogProps) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+    },
+  });
 
-    if (!title.trim()) {
-      toast.error("Validation Error", {
-        description: "Board title is required",
-      });
-      return;
-    }
-
-    setLoading(true);
-
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      await axios.post("/api/boards", {
-        title: title.trim(),
-        description: description.trim(),
-        userId: "1",
-      });
+      setIsLoading(true);
+      const board = await createBoard(values);
+      setOpen(false);
+      form.reset();
 
-      toast.success("Success", {
-        description: "Board created successfully",
-      });
+      if (onSuccess) {
+        onSuccess();
+      }
 
-      resetForm();
-      onOpenChange(false);
-
-      if (onSuccess) onSuccess();
-    } catch (error: any) {
-      console.error("Error creating board:", error);
-      toast.error("Error", {
-        description: error.response?.data?.error || "Failed to create board",
-      });
+      // Redirect to the new board
+      router.push(`/boards/${board.id}`);
+    } catch (error) {
+      console.error("Failed to create board:", error);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  };
-
-  const resetForm = () => {
-    setTitle("");
-    setDescription("");
-  };
+  }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Create Board
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Create New Board</DialogTitle>
-            <DialogDescription>
-              Create a new board to organize your tasks and projects.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="title">Board Title *</Label>
-              <Input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g., Work Projects"
-                required
-                autoFocus
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe what this board is about..."
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                onOpenChange(false);
-                resetForm();
-              }}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Creating..." : "Create Board"}
-            </Button>
-          </DialogFooter>
-        </form>
+        <DialogHeader>
+          <DialogTitle>Create New Board</DialogTitle>
+          <DialogDescription>
+            Create a new board to organize your tasks and projects.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Board Title</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Project X" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description (Optional)</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Describe your board..."
+                      className="resize-none"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? "Creating..." : "Create Board"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

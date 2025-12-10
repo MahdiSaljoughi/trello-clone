@@ -1,11 +1,27 @@
-import { NextResponse } from "next/server";
+// src/app/api/boards/route.ts
 import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
 
-// GET /api/boards
 export async function GET() {
   try {
     const boards = await prisma.board.findMany({
-      orderBy: { createdAt: "desc" },
+      include: {
+        lists: {
+          include: {
+            cards: {
+              include: {
+                cardItems: true,
+              },
+              orderBy: {
+                order: "asc",
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
     });
     return NextResponse.json(boards);
   } catch (error) {
@@ -16,23 +32,34 @@ export async function GET() {
   }
 }
 
-// POST /api/boards
+// src/app/api/boards/route.ts
 export async function POST(request: Request) {
   try {
-    const { title, description } = await request.json();
+    const body = await request.json();
+    const { title, description } = body;
 
-    if (!title) {
-      return NextResponse.json({ error: "Title is required" }, { status: 400 });
-    }
-
+    // ایجاد برد با ۴ لیست پیش‌فرض - اینجا هندل می‌شه
     const board = await prisma.board.create({
       data: {
         title,
         description,
+        lists: {
+          create: [
+            { title: "Backlog" },
+            { title: "To Do" },
+            { title: "In Progress" },
+            { title: "Review" },
+            { title: "Release" },
+            { title: "Archived" },
+          ],
+        },
+      },
+      include: {
+        lists: true,
       },
     });
 
-    return NextResponse.json(board);
+    return NextResponse.json(board, { status: 201 });
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to create board" },

@@ -1,36 +1,32 @@
-import { NextResponse } from "next/server";
+// src/app/api/lists/route.ts
 import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
 
-// POST /api/lists
-export async function POST(request: Request) {
+export async function GET() {
   try {
-    const { title, boardId } = await request.json();
-
-    if (!title || !boardId) {
-      return NextResponse.json(
-        { error: "Title and boardId are required" },
-        { status: 400 }
-      );
-    }
-
-    // Get last order
-    const lastList = await prisma.list.findFirst({
-      where: { boardId },
-      orderBy: { order: "desc" },
-    });
-
-    const list = await prisma.list.create({
-      data: {
-        title,
-        boardId,
-        order: lastList ? lastList.order + 1 : 0,
+    const lists = await prisma.list.findMany({
+      include: {
+        board: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+        cards: {
+          include: {
+            cardItems: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
       },
     });
 
-    return NextResponse.json(list);
+    return NextResponse.json(lists);
   } catch (error) {
     return NextResponse.json(
-      { error: "Failed to create list" },
+      { error: "Failed to fetch lists" },
       { status: 500 }
     );
   }

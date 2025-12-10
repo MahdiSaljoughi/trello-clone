@@ -1,8 +1,7 @@
+// src/components/boards/DeleteBoardDialog.tsx
 "use client";
 
 import { useState } from "react";
-import axios from "axios";
-import { Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,89 +9,75 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { deleteBoard } from "@/lib/api";
+import { Board } from "@/types";
+import { Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { DialogClose } from "@radix-ui/react-dialog";
 
 interface DeleteBoardDialogProps {
-  boardId: string;
-  boardTitle: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  board: Board;
   onSuccess?: () => void;
 }
 
 export function DeleteBoardDialog({
-  boardId,
-  boardTitle,
-  open,
-  onOpenChange,
+  board,
   onSuccess,
 }: DeleteBoardDialogProps) {
-  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
-  const handleDelete = async () => {
-    setLoading(true);
-
+  async function handleDelete() {
     try {
-      await axios.delete(`/api/boards/${boardId}`);
+      setIsLoading(true);
+      await deleteBoard(board.id);
+      setOpen(false);
 
-      toast.success("Success", {
-        description: "Board deleted successfully",
-      });
+      if (onSuccess) {
+        onSuccess();
+      }
 
-      onOpenChange(false);
-      if (onSuccess) onSuccess();
-    } catch (error: any) {
-      console.error("Error deleting board:", error);
-      toast.error("Error", {
-        description: error.response?.data?.error || "Failed to delete board",
-      });
+      // Redirect to boards page
+      router.push("/boards");
+    } catch (error) {
+      console.error("Failed to delete board:", error);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  };
+  }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
         <DialogHeader>
-          <div className="flex items-center gap-2 text-red-600">
-            <Trash2 className="h-5 w-5" />
-            <DialogTitle>Delete Board</DialogTitle>
-          </div>
+          <DialogTitle>Are you absolutely sure?</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete
-            <span className="font-semibold text-gray-900 dark:text-white">
-              {boardTitle}
-            </span>
-            ?
+            This action cannot be undone. This will permanently delete the board
+            {board.title} and all of its lists, cards, and checklist items.
           </DialogDescription>
         </DialogHeader>
-
-        <div className="py-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            This action cannot be undone. All lists, cards, and related data
-            will be permanently deleted.
-          </p>
-        </div>
-
         <DialogFooter>
+          <DialogClose disabled={isLoading}>Cancel</DialogClose>
           <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={loading}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
             onClick={handleDelete}
-            disabled={loading}
+            disabled={isLoading}
+            className="bg-red-600 hover:bg-red-700"
           >
-            {loading ? "Deleting..." : "Delete Board"}
+            {isLoading ? "Deleting..." : "Delete Board"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -13,6 +13,13 @@ datasource db {
   provider = "mysql"
 }
 
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 model Board {
   id          String   @id @default(cuid())
   title       String   @db.VarChar(255)
@@ -24,18 +31,17 @@ model Board {
 }
 
 model List {
-  id        String   @id @default(cuid())
-  title     String   @db.VarChar(255)
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  title       String   @db.VarChar(255)
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   boardId String
   board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
   cards   Card[]
 
   @@index([boardId])
-  @@index([boardId, order])
 }
 
 model Card {
@@ -43,51 +49,33 @@ model Card {
   title       String    @db.VarChar(255)
   description String?   @db.Text
   order       Int       @default(0)
-  priority    String    @default("medium") // اضافه کردن این خط
+  priority    Priority  @default(MEDIUM)
   dueDate     DateTime?
   isCompleted Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  listId      String
-  list        List         @relation(fields: [listId], references: [id], onDelete: Cascade)
-  labels      Label[]
-  attachments Attachment[]
-  comments    Comment[]
+  listId    String
+  list      List            @relation(fields: [listId], references: [id], onDelete: Cascade)
+  cardItems ChecklistItem[]
 
   @@index([listId])
   @@index([listId, order])
 }
 
-model Label {
-  id     String @id @default(cuid())
-  title  String @db.VarChar(100)
-  color  String @db.VarChar(7)
-  cardId String
-  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
-
-  @@index([cardId])
-}
-
-model Attachment {
-  id     String @id @default(cuid())
-  name   String @db.VarChar(255)
-  url    String @db.Text
-  type   String @db.VarChar(50)
-  size   Int?
-  cardId String
-  card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
-
-  @@index([cardId])
-}
-
-model Comment {
-  id        String   @id @default(cuid())
-  content   String   @db.Text
-  createdAt DateTime @default(now())
+model ChecklistItem {
+  id          String    @id @default(cuid())
+  title       String
+  priority    Priority  @default(MEDIUM)
+  isCompleted Boolean   @default(false)
+  order       Int       @default(0)
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   cardId String
   card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
 
   @@index([cardId])
+  @@index([cardId, order])
 }
