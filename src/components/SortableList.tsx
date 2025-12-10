@@ -57,7 +57,7 @@ export function SortableList({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex-shrink-0 w-72 ${isDragging ? "opacity-50" : ""}`}
+      className={`shrink-0 w-72 ${isDragging ? "opacity-50" : ""}`}
     >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
         <div className="flex items-center justify-between mb-3">
@@ -86,6 +86,7 @@ export function SortableList({
           {list.cards.map((card) => (
             <SortableCard
               key={card.id}
+              // @ts-ignore
               card={card}
               onDelete={() => onDeleteCard(card.id)}
             />

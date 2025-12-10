@@ -23,6 +23,11 @@ export async function GET() {
             order: "asc",
           },
         },
+        cardLabels: {
+          include: {
+            label: true,
+          },
+        },
       },
       orderBy: {
         createdAt: "desc",

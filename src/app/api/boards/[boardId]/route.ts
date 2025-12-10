@@ -15,9 +15,10 @@ export async function GET(
           include: {
             cards: {
               include: {
-                cardItems: {
-                  orderBy: {
-                    order: "asc",
+                cardItems: true,
+                cardLabels: {
+                  include: {
+                    label: true,
                   },
                 },
               },

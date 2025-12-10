@@ -2,6 +2,7 @@
 import axios from "axios";
 import { Board, Card, ChecklistItem, Priority } from "@/types";
 import { List } from "@/generated/prisma/browser";
+import { CardLabel, Label } from "@/generated/prisma/client";
 
 const api = axios.create({
   baseURL: "/api",
@@ -74,3 +75,27 @@ export const updateCard = (id: string, data: Partial<Card>) =>
 
 export const deleteCard = (id: string) =>
   api.delete(`/cards/${id}`).then((res) => res.data);
+
+// src/lib/api.ts
+// Labels API
+export const fetchBoardLabels = (boardId: string) =>
+  api.get<Label[]>(`/boards/${boardId}/labels`).then((res) => res.data);
+
+export const createLabel = (
+  boardId: string,
+  data: { name: string; color: string }
+) => api.post<Label>(`/boards/${boardId}/labels`, data).then((res) => res.data);
+
+export const deleteLabel = (id: string) => api.delete(`/labels/${id}`);
+
+// Card Labels API
+export const fetchCardLabels = (cardId: string) =>
+  api.get<CardLabel[]>(`/cards/${cardId}/labels`).then((res) => res.data);
+
+export const addLabelToCard = (cardId: string, labelId: string) =>
+  api
+    .post<CardLabel>(`/cards/${cardId}/labels`, { labelId })
+    .then((res) => res.data);
+
+export const removeLabelFromCard = (cardId: string, labelId: string) =>
+  api.delete(`/cards/${cardId}/labels/${labelId}`);

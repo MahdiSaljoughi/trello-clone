@@ -11,10 +11,21 @@ export async function GET(
     const card = await prisma.card.findUnique({
       where: { id: params.cardId },
       include: {
-        list: true,
+        list: {
+          select: {
+            id: true,
+            title: true,
+            boardId: true,
+          },
+        },
         cardItems: {
           orderBy: {
             order: "asc",
+          },
+        },
+        cardLabels: {
+          include: {
+            label: true,
           },
         },
       },

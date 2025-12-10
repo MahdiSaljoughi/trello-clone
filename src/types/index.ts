@@ -32,6 +32,7 @@ export interface Card {
   updatedAt: Date;
   listId: string;
   cardItems: ChecklistItem[];
+  cardLabels?: (CardLabel & { label: Label })[];
 }
 
 export interface ChecklistItem {
@@ -44,4 +45,20 @@ export interface ChecklistItem {
   createdAt: Date;
   updatedAt: Date;
   cardId: string;
+}
+
+// src/types/index.ts
+export interface Label {
+  id: string;
+  name: string;
+  color: string; // Hex color
+  boardId: string;
+  createdAt: Date;
+}
+
+export interface CardLabel {
+  id: string;
+  cardId: string;
+  labelId: string;
+  label: Label;
 }

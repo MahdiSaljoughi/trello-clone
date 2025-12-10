@@ -19,7 +19,7 @@ import {
 import { EditListDialog } from "./EditListDialog";
 import { CreateCardDialog } from "@/components/cards/CreateCardDialog";
 import { useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn, sortCardsByPriority } from "@/lib/utils";
 
 interface ListProps {
   list: ListType;
@@ -46,9 +46,10 @@ export function List({
     onCardCreated();
   };
 
+  const sortedCards = sortCardsByPriority(list.cards);
   return (
     <>
-      <div className="w-80 flex-shrink-0">
+      <div className="w-100 shrink-0">
         <Card
           className={cn(
             "h-full transition-colors duration-200",
@@ -92,7 +93,7 @@ export function List({
               strategy={verticalListSortingStrategy}
             >
               {/* Cards */}
-              {list.cards.map((card) => (
+              {sortedCards.map((card) => (
                 <SortableCard
                   key={card.id}
                   card={card}

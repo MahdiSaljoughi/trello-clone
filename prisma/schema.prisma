@@ -27,7 +27,8 @@ model Board {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  lists List[]
+  lists  List[]
+  labels Label[]
 }
 
 model List {
@@ -55,9 +56,10 @@ model Card {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  listId    String
-  list      List            @relation(fields: [listId], references: [id], onDelete: Cascade)
-  cardItems ChecklistItem[]
+  listId     String
+  list       List            @relation(fields: [listId], references: [id], onDelete: Cascade)
+  cardItems  ChecklistItem[]
+  cardLabels CardLabel[]
 
   @@index([listId])
   @@index([listId, order])
@@ -78,4 +80,32 @@ model ChecklistItem {
 
   @@index([cardId])
   @@index([cardId, order])
+}
+
+// در schema.prisma
+model Label {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(100)
+  color     String   @db.VarChar(7) // Hex color مثل #3b82f6
+  createdAt DateTime @default(now())
+
+  boardId String
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  cardLabels CardLabel[]
+
+  @@unique([boardId, name])
+  @@index([boardId])
+}
+
+model CardLabel {
+  id      String @id @default(cuid())
+  cardId  String
+  labelId String
+  card    Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  label   Label  @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, labelId])
+  @@index([cardId])
+  @@index([labelId])
 }

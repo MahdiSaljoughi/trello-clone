@@ -55,7 +55,7 @@ export default function BoardPage() {
   };
 
   const handleCardUpdated = () => {
-    loadBoard();
+    // loadBoard();
   };
 
   const handleCardDeleted = () => {
