@@ -4,18 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && npx prisma generate",
     "start": "next start",
-    "lint": "next lint",
-    "docker:build": "docker build -t trello-app .",
-    "docker:run": "docker run -p 3000:3000 trello-app",
-    "docker:compose:up": "docker-compose up -d",
-    "docker:compose:down": "docker-compose down",
-    "docker:compose:logs": "docker-compose logs -f",
-    "docker:compose:dev": "docker-compose -f docker-compose.yml -f docker-compose.dev.yml up",
-    "docker:prisma:migrate": "docker-compose exec app npx prisma migrate dev",
-    "docker:prisma:studio": "docker-compose up prisma-studio",
-    "docker:db:reset": "docker-compose down -v && docker-compose up -d"
+    "lint": "next lint"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
